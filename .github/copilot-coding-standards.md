@@ -112,25 +112,32 @@ React Compiler is enabled (`reactCompiler: true` in `next.config.ts`). Manual `u
 
 ### API Layer (`src/api/<feature>/api.ts`)
 
-- Pure `fetch` functions with no React dependencies.
-- All HTTP requests MUST use the native `fetch` API — never axios or other clients.
-- Use `API_BASE_URL` from `@/api/shared/api` — never hardcode URLs.
+- Pure functions with no React dependencies.
+- **MUST** use **`apiJsonFetch`** or **`apiFetch`** from `@/api/shared/api` for calls that go through this app’s backend proxy / session model — **do not** use raw `fetch()` in feature `api.ts` files for those paths (see `src/api/README.md`).
+- All HTTP requests MUST use the native `fetch` API **via those wrappers** — never axios or other clients.
+- Use paths/`API_BASE_URL` resolution from `@/api/shared/api` — never hardcode base URLs.
 - Throw on non-OK responses.
 
 ```typescript
+import { apiJsonFetch } from '@/api/shared/api';
+
+import type { Store } from './types';
+
 export async function fetchStores(): Promise<Store[]> {
-  const res = await fetch(`${API_BASE_URL}/api/stores`, {
-    next: { tags: ['stores'] },
-  });
+  const res = await apiJsonFetch('/api/menu-admin/api/v1/stores');
   if (!res.ok) throw new Error('Failed to fetch stores');
-  return res.json();
+  return res.json() as Store[];
 }
 ```
+
+For Server Components using Next.js `fetch` caching (`next: { tags }`), either keep caching in the Server Component layer or extend the shared pattern — **do not** bypass `apiJsonFetch`/`apiFetch` in `src/api/<feature>/api.ts` with inline `fetch`.
 
 ### TanStack Query Hooks (`src/api/<feature>/hooks/use*.ts`)
 
 - Wrap pure fetch functions with `useQuery` / `useMutation` / `useSuspenseQuery`.
-- Use query key factory pattern per feature.
+- Use a shared query key factory per feature (for example,
+  `src/api/<feature>/query-keys.ts`). Do not inline query-key magic strings such
+  as `['admin-users']` inside hooks or components.
 - Invalidate related queries in `onSuccess` for mutations.
 
 ### Server Actions (`src/api/<feature>/actions.ts`)
@@ -149,6 +156,9 @@ useEffect(() => {
 
 // NEVER: Direct fetch in components
 const res = await fetch('http://localhost:5000/api/stores');
+
+// NEVER: Raw fetch in src/api/<feature>/api.ts for proxy/session-backed APIs — use apiJsonFetch / apiFetch
+const res = await fetch('/api/menu-admin/api/v1/...', { credentials: 'include' });
 
 // NEVER: axios or other HTTP libraries
 import axios from 'axios';
@@ -177,6 +187,7 @@ import axios from 'axios';
 - MUI v7 Grid syntax: `<Grid size={{ xs: 12, md: 6 }}>` — not the old `xs={12} md={6}` props.
 - Inline styles (`const styles: Record<string, SxProps<Theme>>`) when < 100 lines.
 - Separate `.styles.ts` file when >= 100 lines.
+- Data-display tabs MUST use `smoothTabsSx`, `SmoothTabPanels`, and `SmoothTabPanel` from `@/components/shared/SmoothTabTransition` for smooth indicator and perceptible fade-and-settle panel transitions.
 
 ### Tailwind CSS
 
@@ -186,8 +197,17 @@ import axios from 'axios';
 
 ### Theme Tokens
 
-- Prefer theme tokens (`theme.palette.*`, `theme.spacing()`, `theme.typography.*`) over hardcoded values.
-- Dark/light mode is handled by `useThemeMode` hook — never hardcode colors that break in dark mode.
+- Use theme tokens and helpers (`theme.palette.*`, `theme.spacing()`,
+  `theme.typography.*`, `theme.shape.*`, `theme.shadows`) over hardcoded
+  design values.
+- Do not hardcode literal colors, font families, font sizes, font weights,
+  theme-derived spacing, radii, shadows, or contrast values when a project
+  token exists.
+- Dark/light mode is handled by `useThemeMode` hook — never hardcode colors
+  that break in dark mode.
+- Literal theme/font overrides are allowed only when explicitly requested by
+  the user or design; keep them local and add a short rationale when the reason
+  is not obvious.
 
 ---
 
@@ -211,7 +231,7 @@ src/api/<feature>/
   actions.ts          # Server Actions
   types.ts            # Feature types
 
-src/components/dashboard/<feature>/
+src/components/app/<feature>/
   FeatureList.tsx     # Client component
   FeatureCard.tsx     # Presentation component
 ```
@@ -226,9 +246,12 @@ When adding a new feature, ALL of these are required:
 4. `src/api/<feature>/api.ts` — Pure fetch functions
 5. `src/api/<feature>/types.ts` — TypeScript types
 6. `src/api/<feature>/hooks/` — TanStack Query hooks
-7. `src/components/dashboard/<feature>/` — UI components
-8. Update `navigationItems` in `src/components/dashboard/Dashboard.tsx`
-9. Export `generateMetadata` from the page for SEO
+7. `src/components/app/<feature>/` — UI components
+8. Add the route title to `ADMIN_DASHBOARD_ROUTE_TITLES` in `src/constants/adminDashboardRoutes.ts`; the shared `PageHeader` is the only visible admin route title under the breadcrumbs
+9. Update `src/components/app/dashboardNavigation.tsx` when the route should appear in the sidebar
+10. Export `generateMetadata` from the page for SEO
+
+Public or standalone pages outside `app/(admin)` must add their visible title to `src/constants/sitePageTitles.ts` and render it with `BodyHeader` from `src/components/layout/BodyHeader.tsx`.
 
 ---
 
@@ -273,6 +296,7 @@ When adding a new feature, ALL of these are required:
   - `curly: [2, 'all']` — braces required on all control structures, even single-line.
   - `no-console: 'warn'` — avoid `console.*` calls; remove before committing.
   - `@typescript-eslint/no-explicit-any: 'warn'` — prefer proper types.
+  - `max-lines` (for `*.tsx`): `'error'` at 400 lines (`skipBlankLines: true`, `skipComments: true`).
 - **Run lint**: `pnpm lint` (check) or `pnpm lint:fix` (auto-fix).
 - **Run format**: `pnpm format` (fix) or `pnpm format:check` (check).
 - **2-space indentation** throughout the project.
@@ -316,17 +340,20 @@ When adding a new feature, ALL of these are required:
 
 ## Anti-Patterns — Never Do These
 
-| Anti-Pattern                                 | Correct Approach                                 |
-| -------------------------------------------- | ------------------------------------------------ |
-| `useEffect` + `fetch` for data loading       | TanStack Query hooks or Server Components        |
-| Hardcoded API URLs                           | `API_BASE_URL` from `@/api/shared/api`           |
-| `axios` or other HTTP clients                | Native `fetch` API                               |
-| `any` type                                   | Proper TypeScript types / `unknown` + guards     |
-| `console.log` left in production code        | Remove or use proper logging                     |
-| `react-toastify` or `alert()`                | `useMuiSnackbar`                                 |
-| Relative imports across feature boundaries   | `@/` path alias                                  |
-| Smart presentation components                | Keep data fetching in Server Components or hooks |
-| Manual memoization without profiling         | Trust React Compiler                             |
-| Mixing MUI `sx` and Tailwind on same element | Pick one per element                             |
-| Old MUI Grid syntax (`xs={12}`)              | v7 syntax: `size={{ xs: 12 }}`                   |
-| Synchronous `params` / `searchParams` access | `await params` (Next.js 16 async Promise)        |
+| Anti-Pattern                                                | Correct Approach                                                      |
+| ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| `useEffect` + `fetch` for data loading                      | TanStack Query hooks or Server Components                             |
+| Hardcoded API URLs                                          | Path resolution via `@/api/shared/api` (`apiFetch` / `apiJsonFetch`)  |
+| Raw `fetch()` in `src/api/**/api.ts` for backend proxy APIs | `apiJsonFetch` or `apiFetch` from `@/api/shared/api`                  |
+| `axios` or other HTTP clients                               | Native `fetch` via **`apiJsonFetch` / `apiFetch`**                    |
+| `any` type                                                  | Proper TypeScript types / `unknown` + guards                          |
+| `console.log` left in production code                       | Remove or use proper logging                                          |
+| `react-toastify` or `alert()`                               | `useMuiSnackbar`                                                      |
+| Relative imports across feature boundaries                  | `@/` path alias                                                       |
+| Smart presentation components                               | Keep data fetching in Server Components or hooks                      |
+| Manual memoization without profiling                        | Trust React Compiler                                                  |
+| Mixing MUI `sx` and Tailwind on same element                | Pick one per element                                                  |
+| Old MUI Grid syntax (`xs={12}`)                             | v7 syntax: `size={{ xs: 12 }}`                                        |
+| Synchronous `params` / `searchParams` access                | `await params` (Next.js 16 async Promise)                             |
+| Hardcoded theme/font values                                 | Theme tokens or existing design-token classes                         |
+| Duplicate page-level route titles under body headers        | Centralized `PageHeader` or `BodyHeader` titles from route title maps |

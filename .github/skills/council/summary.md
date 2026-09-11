@@ -62,11 +62,11 @@
 
 ## Flexibility Summary
 
-| Dimension | Range |
-|-----------|-------|
-| **Agents** | 2–6, named or auto-inferred |
-| **Modes** | debate, discuss, improve, review |
-| **Rounds** | 2–3, mode-dependent |
-| **Input** | Pure question, code, file path, or pasted artifact |
-| **Skill catalog** | 30+ specialized roles, mix-and-matched per topic |
-| **Invocation** | Single natural-language line — no config files, no flags |
+| Dimension         | Range                                                    |
+| ----------------- | -------------------------------------------------------- |
+| **Agents**        | 2–6, named or auto-inferred                              |
+| **Modes**         | debate, discuss, improve, review                         |
+| **Rounds**        | 2–3, mode-dependent                                      |
+| **Input**         | Pure question, code, file path, or pasted artifact       |
+| **Skill catalog** | 30+ specialized roles, mix-and-matched per topic         |
+| **Invocation**    | Single natural-language line — no config files, no flags |

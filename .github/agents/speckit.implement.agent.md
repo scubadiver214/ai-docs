@@ -52,6 +52,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read contracts/ for API specifications and test requirements
    - **IF EXISTS**: Read research.md for technical decisions and constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
+   - **IF RELEVANT**: Read repo guidance and agent docs such as `README.md`, `.github/agents/**`, and nearby feature documentation before writing code
+   - **IF USING LIBRARY/APIS**: Use Context7 when available or consult current official documentation for framework, library, setup, or configuration details instead of relying on memory
 
 4. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
@@ -116,6 +118,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
+   - **No magic strings**: Centralize routes, statuses, roles, query keys, storage keys, event names, feature flags, and repeated domain values in constants or typed factories
+   - **No hardcoded theme/font values**: Use project theme tokens, typography
+     tokens, spacing helpers, CSS variables, or design-token classes unless an
+     explicit override is requested
+   - **Documentation-grounded code**: Follow relevant local docs and current official docs when code depends on framework/library behavior or project conventions
 
 8. Progress tracking and error handling:
    - Report progress after each completed task

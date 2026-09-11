@@ -1,5 +1,6 @@
 ---
-type: 'manual'
+name: 'trace'
+description: 'Comprehensive codebase analysis through systematic, iterative tracing It’s best for questions like: “trace this feature end-to-end,” “how does this request flow through the app,” “where is duplication in this execution path,” or “map this before refactoring.” It is not ideal for quick bug fixes, normal code review, or small implementation tasks.'
 ---
 
 # Deep-Trace Meta-Prompt Rule

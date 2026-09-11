@@ -30,9 +30,10 @@ Creating a component? Follow this checklist:
 
 - [ ] Server Component by default (no directive needed)
 - [ ] Add `'use client'` only if it needs interactivity (state, effects, event handlers)
-- [ ] Use `React.FC<Props>` pattern with TypeScript for client components
+- [ ] Add explicit return type (e.g. `function Foo({ ... }: Props): JSX.Element`)
 - [ ] Import aliases: `@/` for `src/`
 - [ ] Styles: MUI `sx` prop or Tailwind classes
+- [ ] Data-display tabs use `smoothTabsSx`, `SmoothTabPanels`, and `SmoothTabPanel` for smooth transitions
 - [ ] React Compiler handles memoization automatically; manual `useCallback`/`useMemo` only if profiling shows a need
 - [ ] Default export at bottom
 - [ ] Use `useMuiSnackbar` for user notifications (client components)
@@ -44,12 +45,21 @@ Creating a feature? Set up this structure:
 - [ ] Create `app/(admin)/<feature>/page.tsx` (Server Component)
 - [ ] Create `app/(admin)/<feature>/loading.tsx` (Suspense fallback)
 - [ ] Create `app/(admin)/<feature>/error.tsx` (error boundary, `'use client'`)
-- [ ] Create pure fetch functions in `src/api/<feature>/api.ts` (uses native `fetch`)
+- [ ] Create pure fetch functions in `src/api/<feature>/api.ts` (uses `apiJsonFetch`/`apiFetch` from `@/api/shared/api` — never raw `fetch()`)
 - [ ] Create TanStack Query hooks in `src/api/<feature>/hooks/use*.ts`
 - [ ] Create Server Actions in `src/api/<feature>/actions.ts` (mutations)
 - [ ] Create types in `src/api/<feature>/types.ts`
-- [ ] Create client components in `src/components/dashboard/<feature>/`
-- [ ] Update navigation in `src/components/dashboard/Dashboard.tsx`
+- [ ] Create client components in `src/components/app/<feature>/`
+- [ ] Add the route title in `src/constants/adminDashboardRoutes.ts`; the shared `PageHeader` renders the only visible route title below breadcrumbs
+- [ ] Update sidebar navigation in `src/components/app/dashboardNavigation.tsx` when the route should appear in the nav
+- [ ] **If the feature includes a list view grid**: sort field mapping + search normalization in the API layer, sort/search/page in the TanStack Query key, sort or search changes reset page to 1
+
+Public or standalone pages outside `app/(admin)` must add their visible title to `src/constants/sitePageTitles.ts` and render it with `BodyHeader` from `src/components/layout/BodyHeader.tsx`.
+
+### Validation Boundary
+
+- Do not start Next.js dev servers, open browser automation, run Playwright/UI smoke tests, capture screenshots, or otherwise test the rendered UI for diagnostics unless the user explicitly asks for that runtime UI verification.
+- Prefer code-level validation when useful, such as editor diagnostics, lint, typecheck, or focused unit tests that do not launch the UI. If runtime UI verification would be useful but was not requested, mention it as skipped rather than running it.
 
 ---
 
@@ -122,7 +132,7 @@ All HTTP requests use the native `fetch` API. Data fetching uses two patterns de
 ```typescript
 // app/(admin)/stores/page.tsx — Server Component (default)
 import { fetchStores } from '@/api/stores/api';
-import { StoreList } from '@/components/dashboard/stores/StoreList';
+import { StoreList } from '@/components/app/stores/StoreList';
 
 export default async function StoresPage() {
   const stores = await fetchStores();
@@ -202,7 +212,7 @@ export function useDeleteStore() {
 Use `useSuspenseQuery` instead of `useQuery` when the component is wrapped in a `<Suspense>` boundary. Eliminates `isLoading` checks — the component always receives data.
 
 ```typescript
-// src/components/dashboard/stores/StoreList.tsx
+// src/components/app/stores/StoreList.tsx
 'use client';
 
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -234,7 +244,7 @@ Prefetch in a Server Component to seed the TanStack Query cache before the clien
 import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query';
 import { fetchStores } from '@/api/stores/api';
 import { storeKeys } from '@/api/stores/query-keys';
-import { StoreList } from '@/components/dashboard/stores/StoreList';
+import { StoreList } from '@/components/app/stores/StoreList';
 
 export default async function StoresPage() {
   const queryClient = new QueryClient();
@@ -367,6 +377,18 @@ src/
 - Use `sx` prop for MUI components
 - Type-safe with `SxProps<Theme>`
 - Theme access: `(theme) => theme.palette.primary.main`
+- Do not hardcode theme or font values directly in components unless
+  explicitly requested by the user or design
+- Use project tokens for colors, typography, spacing, radii, shadows, and
+  contrast values: `theme.palette.*`, `theme.spacing()`,
+  `theme.typography.*`, `theme.shape.*`, `theme.shadows`, CSS variables, or
+  existing design-token classes
+
+**Data-display tabs:**
+
+- Tabs that switch displayed data MUST use smooth transitions.
+- Apply `smoothTabsSx` to MUI `Tabs` and wrap panel content with `SmoothTabPanels` / `SmoothTabPanel` from `@/components/shared/SmoothTabTransition` for a perceptible fade-and-settle transition.
+- Link each `Tab` and panel with stable `id`, `aria-controls`, and `aria-labelledby` values.
 
 **MUI v7 Grid:**
 
@@ -436,8 +458,8 @@ export default function StoresLoading() {
 ```typescript
 // app/(admin)/admin/page.tsx
 import { Suspense } from 'react';
-import { StoresSummary } from '@/components/dashboard/admin/StoresSummary';
-import { RecentActivity } from '@/components/dashboard/admin/RecentActivity';
+import { StoresSummary } from '@/components/app/admin/StoresSummary';
+import { RecentActivity } from '@/components/app/admin/RecentActivity';
 
 export default function AdminPage() {
   return (
@@ -575,6 +597,8 @@ export function DeleteStoreButton({ id }: { id: string }) {
 7. **Styles Based on Size**: <100 inline, >100 separate
 8. **Import Alias**: Use `@/` for `src/`
 9. **useMuiSnackbar**: For all client-side user notifications
+10. **Server-Side Sort and Search**: All list view grids delegate sorting and searching to the API — no client-side sort/filter pipeline; sort field, sort direction, and search term are part of the TanStack Query key; changing either resets pagination to page 1
+11. **Consistent Rows-Per-Page Options**: Every paginated list/table view must use the app-wide rows-per-page options `[10, 25, 50, 100]` with a default of `25`, via `usePersistedRowsPerPage`. Do not introduce a different set of options (e.g. `[10, 20, 50, 100]`) or a different default for a single feature — see [copilot-instructions.md](../../copilot-instructions.md) for the enforced rule
 
 ---
 
@@ -632,7 +656,7 @@ src/
 ```typescript
 // app/(admin)/stores/page.tsx — Server Component
 import { fetchStores } from '@/api/stores/api';
-import { StoreList } from '@/components/dashboard/stores/StoreList';
+import { StoreList } from '@/components/app/stores/StoreList';
 
 export default async function StoresPage() {
   const stores = await fetchStores();
@@ -641,7 +665,7 @@ export default async function StoresPage() {
 ```
 
 ```typescript
-// src/components/dashboard/stores/StoreList.tsx — Client Component
+// src/components/app/stores/StoreList.tsx — Client Component
 'use client';
 
 import { useState, useCallback } from 'react';

@@ -9,6 +9,9 @@ LCE Digital
 > may also find it useful, but guidance here is optimized for automation  
 > and consistency by AI-assisted workflows.
 
+> **React Compiler notice:**  
+> This repository runs the stable React Compiler. Sections 5.3–5.12 (Re-render Optimization) describe patterns the compiler handles automatically. Skip those sections unless profiling confirms a specific regression that the compiler does not eliminate.
+
 ---
 
 ## Abstract
@@ -84,6 +87,13 @@ Comprehensive performance optimization guide for React and Next.js applications,
    - 8.1 [Initialize App Once, Not Per Mount](#81-initialize-app-once-not-per-mount)
    - 8.2 [Store Event Handlers in Refs](#82-store-event-handlers-in-refs)
    - 8.3 [useEffectEvent for Stable Callback Refs](#83-useeffectevent-for-stable-callback-refs)
+9. [Responsive Guardrails](#9-responsive-guardrails) — **NON-NEGOTIABLE**
+   - 9.1 [Mobile-First Layout Coverage](#91-mobile-first-layout-coverage)
+10. [Project Maintainability Guardrails](#10-project-maintainability-guardrails) — **NON-NEGOTIABLE**
+
+- 10.1 [No Magic Strings](#101-no-magic-strings)
+- 10.2 [Use Relevant Documentation](#102-use-relevant-documentation)
+- 10.3 [Theme And Font Tokens](#103-theme-and-font-tokens)
 
 ---
 
@@ -2919,6 +2929,80 @@ function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
   }, [query]);
 }
 ```
+
+## 9. Responsive Guardrails
+
+**Impact: CRITICAL**
+
+### 9.1 Mobile-First Layout Coverage
+
+All page-level UI must be fully usable at mobile widths (minimum 375px), not just viewable.
+
+**Required:**
+
+- Use responsive breakpoints for layout and spacing (`xs/sm/md/lg`)
+- Ensure all primary actions are reachable without horizontal panning
+- For wide tables, provide a mobile fallback (card/stack layout or equivalent)
+- Keep tap targets at least 44x44 px
+- Validate changed pages at mobile, tablet, and desktop breakpoints before completion
+
+**Forbidden:**
+
+- Table-only admin views that force users to pan horizontally to reach key controls
+- Toolbars that overflow or clip controls on mobile
+- Hover-only affordances with no touch/keyboard alternative
+
+---
+
+## 10. Project Maintainability Guardrails
+
+**Impact: CRITICAL**
+
+### 10.1 No Magic Strings
+
+Do not scatter hardcoded domain values through React components, hooks, API clients, route files, or shared utilities.
+
+**Required:**
+
+- Extract routes, statuses, roles, query keys, storage keys, event names, feature flags, and repeated domain values to the closest appropriate constants module
+- Reuse existing constants and query-key factories before creating new ones
+- Keep constants typed with `as const`, enums, unions, or factory functions when values are part of a shared contract
+- Import constants in tests when the value represents a contract; use literals only when asserting exact rendered copy or output
+
+**Allowed inline:**
+
+- One-off user-facing copy that is not reused and does not drive behavior
+- Layout-only CSS values that are not theme, brand, typography, or
+  design-token values
+
+### 10.2 Use Relevant Documentation
+
+Before generating or changing code that relies on project conventions, setup/configuration, or library APIs, consult the relevant documentation and align the implementation with it.
+
+**Required:**
+
+- Check nearby source, repo docs, and agent guidance before introducing a new pattern
+- Use Context7 when available or current official docs for framework/library behavior, especially Next.js, React, MUI, TanStack Query, NextAuth.js, TypeScript, and testing tools
+- Prefer documented APIs over memory or guesses, and mention important documentation-driven decisions in the work summary
+
+### 10.3 Theme And Font Tokens
+
+Do not hardcode theme or font values directly in React, Next.js, MUI,
+Tailwind, or CSS code unless the user or design explicitly requests a one-off
+override.
+
+**Required:**
+
+- Use existing tokens and helpers such as `theme.palette.*`, `theme.spacing()`,
+  `theme.typography.*`, `theme.shape.*`, `theme.shadows`, CSS variables, or
+  existing design-token classes
+- Avoid literal colors, font families, font sizes, font weights, theme-derived
+  spacing, radii, shadows, and contrast colors when an equivalent project token
+  exists
+- Keep explicit overrides local and add a short rationale when the reason is
+  not obvious
+- In reviews, flag new hardcoded theme/font literals and recommend the closest
+  existing token
 
 ---
 

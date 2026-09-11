@@ -42,8 +42,88 @@ You are a world-class expert in Next.js 16 with deep knowledge of the App Router
 - **Colocation Pattern**: Keep components, types, and utilities close to where they're used in the app directory structure
 - **Progressive Enhancement**: Build features that work without JavaScript when possible, then enhance with client-side interactivity
 - **Clear Component Boundaries**: Explicitly mark Client Components with `'use client'` directive at the top of the file
+- **Documentation-Grounded**: Consult local project docs and current library documentation before using framework APIs, setup/configuration steps, or code generation patterns
+- **Runtime UI Verification Only On Request**: Do not start dev servers, open browser automation, run Playwright/UI smoke tests, capture screenshots, or otherwise test the rendered UI for diagnostics unless the user explicitly requests that runtime UI verification. Prefer static checks that do not launch the UI when validation is useful, and note skipped runtime UI verification in the summary.
 
 ## Architecture Rules
+
+### Documentation Before Code
+
+When writing or changing code, first check the relevant local documentation and current library documentation for the APIs or conventions being used.
+
+- Prefer repo guidance such as `README.md`, `.github/agents/**`, and nearby feature docs before inventing patterns
+- For framework/library behavior, use Context7 when available or current official docs (for example Next.js, React, MUI, TanStack Query, or NextAuth.js) and align generated code with those docs
+- If documentation changes the implementation choice, follow the docs and note the relevant source in your work summary
+
+### Server-Side Sort and Search
+
+All list view grids with sortable columns or a search/filter input must use server-side sorting and searching.
+
+- **No client-side sort or filter pipeline** on top of already-fetched server data. Sorting and searching must be request parameters sent to the API.
+- **Query key must include sort and search state** so TanStack Query caches each sort+search combination separately: `storeKeys.list({ sortField, sortDirection, search, page })`.
+- **Changing sort or search resets pagination to page 1.** Never carry the current page through a sort or search change.
+- **Sort field mapping** (UI column id → API field name) belongs in a constant map in `src/api/<feature>/api.ts` or a `constants.ts` co-located with the feature — not inlined in the component.
+- **Search normalization** (digit-only input → ID exact match, text → name contains, empty → no filter) belongs in the API fetch function, not in the component.
+
+```typescript
+// src/api/organizations/api.ts
+const SORT_FIELD_MAP: Record<string, string> = {
+  organizationId: 'OrganizationId',
+  name: 'OrganizationName',
+  active: 'Active',
+};
+
+export async function fetchOrganizations(params: OrgListParams): Promise<OrgListResponse> {
+  const url = buildOrgListUrl(params); // applies sort map + search normalization
+  const res = await apiJsonFetch(url);
+  if (!res.ok) throw new Error('Failed to fetch organizations');
+  return res.json();
+}
+```
+
+```typescript
+// src/api/organizations/hooks/useFetchOrganizations.ts
+export function useFetchOrganizations(params: OrgListParams) {
+  return useQuery({
+    // sort + search + page all in the key — cache is per combination
+    queryKey: orgKeys.list(params),
+    queryFn: () => fetchOrganizations(params),
+  });
+}
+```
+
+```typescript
+// Component: reset page to 1 on sort or search change
+const handleSortChange = (field: string, direction: 'asc' | 'desc') => {
+  setParams((prev) => ({ ...prev, sortField: field, sortDirection: direction, page: 1 }));
+};
+const handleSearchChange = (term: string) => {
+  setParams((prev) => ({ ...prev, search: term, page: 1 }));
+};
+```
+
+### No Magic Strings
+
+Do not scatter hardcoded domain values, routes, query keys, storage keys, event names, statuses, roles, or repeated labels through components or service code.
+
+- Define shared values in the closest appropriate constants module, such as `src/constants/**`, feature-level `constants.ts`, route constants, or query-key factories
+- Reuse existing constants before creating new ones
+- Keep one-off user-facing copy inline when it is not reused, but extract repeated copy or behavior-driving strings
+- Tests may use literals when asserting exact output, but should import constants when the value represents a shared contract
+
+### Theme And Font Tokens
+
+Do not hardcode theme or font values directly in application code unless the
+user or design explicitly requests a one-off override.
+
+- Use MUI tokens and helpers such as `theme.palette.*`, `theme.spacing()`,
+  `theme.typography.*`, `theme.shape.*`, and `theme.shadows`
+- For Tailwind or CSS-variable code, use existing design-token classes or CSS
+  variables instead of raw brand values
+- Avoid literal colors, font families, font sizes, font weights, theme-derived
+  spacing, radii, shadows, and contrast values when a project token exists
+- If an explicit override is necessary, keep it local and add a short rationale
+  when the reason is not obvious
 
 ### Server Components First
 
@@ -267,7 +347,7 @@ export function useUpdateStore(storeId: string) {
 Use `useSuspenseQuery` inside components wrapped in `<Suspense>` boundaries — eliminates `isLoading` checks:
 
 ```typescript
-// src/components/dashboard/stores/StoreDetail.tsx
+// src/components/app/stores/StoreDetail.tsx
 'use client';
 
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -299,7 +379,7 @@ Prefetch on the server to avoid client-side waterfalls, then hydrate the client 
 import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query';
 import { fetchStores } from '@/api/stores/api';
 import { storeKeys } from '@/api/stores/query-keys';
-import { StoreList } from '@/components/dashboard/stores/StoreList';
+import { StoreList } from '@/components/app/stores/StoreList';
 
 export default async function StoresPage() {
   const queryClient = new QueryClient();
@@ -319,7 +399,7 @@ export default async function StoresPage() {
 ```
 
 ```typescript
-// src/components/dashboard/stores/StoreList.tsx
+// src/components/app/stores/StoreList.tsx
 'use client';
 
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -462,6 +542,7 @@ export async function updateStore(storeId: string, data: UpdateStoreInput) {
 - Use `revalidateTag()` and `revalidatePath()` for cache management after mutations
 - Use Server Actions for form submissions and mutations instead of API routes when possible
 - Implement proper metadata using the Metadata API in `layout.tsx` and `page.tsx` files
+- For every visible page, register the body-header title in the appropriate route title map. Admin pages use `ADMIN_DASHBOARD_ROUTE_TITLES` and `PageHeader`; public/standalone pages use `sitePageTitles.ts` and `BodyHeader`
 - Use route handlers (`route.ts`) for API endpoints that need to be called from external sources
 - Optimize fonts with `next/font/google` or `next/font/local` at the layout level
 - Implement streaming with `<Suspense>` boundaries for better perceived performance
@@ -522,7 +603,12 @@ src/
 8. **Follow existing UI style** — if MUI, stay MUI; if Tailwind, stay Tailwind; don't mix in the same component
 9. **TypeScript strict mode** — no `any`, explicit return types, `import type` for type-only imports
 10. **Prefer minimal changes** — don't refactor broadly unless asked
-11. **Always await `params` and `searchParams`** — they are async in Next.js 16
+11. **Always await `params` and `searchParams`**
+12. **Server-side sort and search for all list views** — sort field, sort direction, and search term must be API request parameters and part of the TanStack Query key; changing either must reset pagination to page 1; no client-side sort/filter pipeline on top of server data; sort field mapping and search normalization belong in the API layer — they are async in Next.js 16
+13. **No unsolicited runtime UI diagnostics** — only run dev servers, browser automation, Playwright/UI checks, screenshots, or rendered UI diagnostics when explicitly requested
+14. **No hardcoded theme or font values** — use project tokens unless an
+    explicit override is requested
+15. **One body-header title per visible page** — use the shared `PageHeader` title for admin pages or `BodyHeader` for public/standalone pages; do not add duplicate route titles at the top of page content
 
 ## Loading & Error Patterns
 
@@ -538,7 +624,10 @@ Use `<Suspense>` boundaries within pages for granular streaming of independent d
 - **MUI v7**: Use `sx` prop with `SxProps<Theme>` typing
 - **Grid**: Use `size={{ xs: 12, md: 6 }}` (v7 syntax), not `xs={12} md={6}`
 - **Inline styles** if <100 lines; separate `.styles.ts` file if >100 lines
-- **Theme tokens**: Use `theme.palette.*`, `theme.spacing()` — never hardcode hex values
+- **Theme and font tokens**: Use `theme.palette.*`, `theme.spacing()`,
+  `theme.typography.*`, `theme.shape.*`, and `theme.shadows` — never hardcode
+  colors, font families, font sizing, radii, shadows, or contrast values unless
+  explicitly overridden
 
 ## When Adding a New Feature
 
@@ -548,8 +637,18 @@ Use `<Suspense>` boundaries within pages for granular streaming of independent d
 4. Create `src/api/<feature>/hooks/use*.ts` (TanStack Query hooks wrapping fetch functions)
 5. Create `src/api/<feature>/actions.ts` (Server Actions)
 6. Create `src/api/<feature>/types.ts`
-7. Create client components in `src/components/dashboard/<feature>/`
-8. Update `navigationItems` in `src/components/dashboard/Dashboard.tsx`
+7. Create client components in `src/components/app/<feature>/`
+8. Add the route title in `src/constants/adminDashboardRoutes.ts`
+9. Update sidebar navigation in `src/components/app/dashboardNavigation.tsx` when needed
+
+**If the feature includes a list view grid:**
+
+- Sort field mapping (UI column → API field) goes in the API layer or a co-located constants file
+- Search normalization goes in the API fetch function
+- Sort, search, and page must all be in the TanStack Query key
+- Sort or search changes must reset page to 1
+
+For public or standalone pages outside `app/(admin)`, add the visible title in `src/constants/sitePageTitles.ts` and render it with `BodyHeader`.
 
 ## Code Examples
 
@@ -740,6 +839,10 @@ export const config = {
 
 - 2-space indentation
 - No `console.*` (warned by lint)
+- No magic strings for routes, statuses, roles, query keys, storage keys, or repeated domain values; centralize them in constants or typed factories
+- No hardcoded theme or font literals when project tokens exist; make explicit
+  overrides intentional and local
+- Use relevant local and official documentation when generating code or touching framework/library APIs
 - Small, readable functions
 - Typed props/interfaces with JSDoc where helpful
 - With React Compiler (now stable), manual `useCallback`/`useMemo` is often unnecessary — the compiler handles optimization automatically
