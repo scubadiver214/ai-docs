@@ -1,4 +1,4 @@
-# LCE Menu Admin UI — Codebase Map
+# Codebase Map
 
 **Generated**: 2026-02-25  
 **Project**: lce-menu-admin-ui v0.0.1  
