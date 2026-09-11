@@ -1,4 +1,4 @@
-# Copilot Instructions — LCE Menu Admin UI
+# Copilot Instructions
 
 This file defines **solution-specific, enforceable rules** for Copilot when generating or editing code in this repository. Prefer existing patterns over inventing new ones.
 
