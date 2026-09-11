@@ -1,7 +1,7 @@
 # Codebase Map
 
 **Generated**: 2026-02-25  
-**Project**: lce-menu-admin-ui v0.0.1  
+**Project**:  v0.0.1  
 **Purpose**: Authoritative reference for the constitution and all speckit agents. Describes every significant file, its role, and how it connects to other parts of the system.
 
 ---
