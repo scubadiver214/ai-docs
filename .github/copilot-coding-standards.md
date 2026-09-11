@@ -1,4 +1,4 @@
-# Copilot Coding Standards — LCE Menu Admin UI
+# Copilot Coding Standards
 
 Enforceable coding standards for GitHub Copilot code generation and review in this repository. These complement the architectural rules in [copilot-instructions.md](./copilot-instructions.md).
 
